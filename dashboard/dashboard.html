@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Session Tracker</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#667;--line:#dde;--acc:#2457d6;--card:#f5f6f9;--bar:#2457d6}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e6e6;--mut:#9aa;--line:#2c3036;--acc:#7ba0ff;--card:#1c1f25;--bar:#7ba0ff}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif}
+h1{font-size:18px;margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:12px}
+.bar label{color:var(--mut);display:flex;gap:4px;align-items:center}
+input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+button{cursor:pointer}button.on{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+button:disabled{opacity:.4;cursor:default}
+.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border-radius:8px;padding:8px 12px;min-width:110px}
+.kpi.heute{margin-left:auto;text-align:right;padding:14px 26px;border:2px solid var(--acc)}.kpi.heute b{font-size:38px;line-height:1.1}.kpi.heute span{font-size:14px}
+.per{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:flex-end;margin-bottom:6px}.per .g{display:flex;flex-direction:column;gap:3px}
+.per .g>span{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.per .seg{display:flex}.per .seg button{border-radius:0;margin-left:-1px;padding:4px 12px}.per .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}.per .seg button:last-child{border-radius:0 6px 6px 0}.per .seg button:only-child{border-radius:6px}
+#percap{color:var(--mut);margin-bottom:10px}#percap b{color:var(--fg)}.kpi b{display:block;font-size:20px}.kpi span{color:var(--mut);font-size:12px}
+#chart{width:100%;height:170px;margin-bottom:12px;background:var(--card);border-radius:8px;display:block}
+#chart rect.b{fill:var(--bar)}#chart rect.b.we{opacity:.5}#chart rect.h{fill:transparent}#chart rect.h:hover{fill:var(--line);opacity:.5}
+#chart text{fill:var(--mut);font-size:10px}#chart line{stroke:var(--line)}
+#tip{position:fixed;z-index:9;pointer-events:none;background:var(--fg);color:var(--bg);padding:6px 10px;border-radius:6px;font-size:12px;line-height:1.5;display:none}
+#test{background:#c0392b;color:#fff;padding:8px 12px;border-radius:6px;margin-bottom:12px;display:none}
+tr.d td{background:var(--card);font-weight:600;border-top:2px solid var(--acc)}
+tr.d .n{color:var(--mut);font-weight:400}
+.wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:5px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--card);cursor:pointer;user-select:none;font-weight:600}
+tr.f th{top:30px;cursor:default;font-weight:400;padding:3px 6px}
+tr.f input,tr.f select{width:100%;min-width:70px;padding:2px 4px;font-size:12px}
+tr.f input[type=date]{width:118px}
+tr.f input[type=number]{width:64px;min-width:0}
+tr.g td{background:var(--card);font-weight:600;cursor:pointer}
+tr.g .n{color:var(--mut);font-weight:400}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.pager{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--mut)}
+details{position:relative}summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+details div{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:140px}
+.empty{padding:24px;text-align:center;color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>Session Tracker</h1>
+<div id="test">TESTDATEN – dieses Dashboard liest nicht die echte Datenbank (SESSION_DB gesetzt).</div>
+<div id="tip"></div>
+
+<div class="bar">
+  <button id="m-blocks" class="on">Anwesenheitsblöcke</button>
+  <button id="m-events">Rohereignisse</button>
+  <input id="q" type="search" placeholder="Freitextsuche…">
+  <label>Gruppieren <select id="grp"></select></label>
+  <label id="alivewrap"><input id="alive" type="checkbox" checked> Heartbeats ausblenden</label>
+  <label id="kurzwrap">Tage unter <input id="kurz" type="number" min="0" step="0.5" value="1" style="width:64px"> h ausblenden</label>
+  <label id="derwrap"><input id="der" type="checkbox"> hergeleitete Daten (Logs, Browser, Shell …)</label>
+  <label id="gapwrap">Pausen unter <input id="gap" type="number" min="0" step="1" value="5" style="width:64px"> min zusammenfassen</label>
+  <details><summary>Spalten</summary><div id="cols"></div></details>
+  <button id="reset">Filter zurücksetzen</button>
+  <button id="csv">CSV-Export</button>
+</div>
+
+<div class="per" id="per"></div>
+<div id="percap"></div>
+<div class="kpis" id="kpis"></div>
+<details id="yearswrap" open><summary>Schnitt pro Jahr <span class="n">(gewählter Zeitraum, unabhängig von den übrigen Filtern)</span></summary><table id="years"></table></details>
+<svg id="chart" aria-label="Minuten pro Tag"></svg>
+<div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
+<div class="pager" id="pager"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const hm = ts => { const d = new Date(ts * 1000); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const full = ts => `${day(ts)} ${hm(ts)}:${pad(new Date(ts * 1000).getSeconds())}`;
+const day = ts => { const d = new Date(ts * 1000); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const dur = min => { const m = Math.round(min); return m >= 60 ? `${Math.floor(m / 60)} h ${pad(m % 60)} min` : `${m} min`; };
+const dmy = tag => tag.split('-').reverse().join('.');
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const w = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  return `${t.getUTCFullYear()}-KW${pad(w)}`;
+}
+function derive(ts) {
+  const d = new Date(ts * 1000);
+  return { tag: day(ts), wochentag: WD[d.getDay()], stunde: d.getHours(), woche: isoWeek(d), monat: day(ts).slice(0, 7) };
+}
+
+const COLS = {
+  blocks: [
+    { k: 'tag', l: 'Tag', t: 'text' }, { k: 'start', l: 'Start', t: 'date', f: hm }, { k: 'ende', l: 'Ende', t: 'date', f: hm },
+    { k: 'dauer', l: 'Dauer', t: 'num', f: dur }, { k: 'wochentag', l: 'Wochentag', t: 'cat' }, { k: 'stunde', l: 'Startstunde', t: 'cat' },
+    { k: 'woche', l: 'Woche', t: 'cat' }, { k: 'monat', l: 'Monat', t: 'cat' }, { k: 'quelle', l: 'Quelle', t: 'cat' },
+  ],
+  events: [
+    { k: 'ts', l: 'Zeit', t: 'date', f: full }, { k: 'event', l: 'Ereignis', t: 'cat' }, { k: 'tag', l: 'Tag', t: 'text' },
+    { k: 'wochentag', l: 'Wochentag', t: 'cat' }, { k: 'stunde', l: 'Stunde', t: 'cat' }, { k: 'woche', l: 'Woche', t: 'cat' }, { k: 'monat', l: 'Monat', t: 'cat' },
+  ],
+};
+let ROWS = { blocks: [], events: [] }, mode = 'blocks', F = {}, q = '', sort = { k: 'start', dir: -1 }, page = 0, pageSize = 50;
+const PERIODS = [['Woche', [['woche', 'Aktuell'], ['letzte_woche', 'Letzte'], ['vier_wochen', 'Letzte 4']]],
+  ['Monat', [['monat', 'Aktuell'], ['letzter_monat', 'Letzter'], ['drei_monate', 'Letzte 3'], ['sechs_monate', 'Letzte 6']]],
+  ['Quartal', [['quartal', 'Aktuell'], ['vorquartal', 'Vorheriges']]],
+  ['Jahr', [['jahr', 'Aktuell'], ['letztes_jahr', 'Letztes'], ['vorletztes_jahr', 'Vorletztes']]],
+  ['Alles', [['gesamt', 'Gesamt']]]];
+const PNAME = { woche: 'Aktuelle Woche', letzte_woche: 'Letzte Woche', vier_wochen: 'Letzte vier Wochen', monat: 'Aktueller Monat', letzter_monat: 'Letzter Monat',
+  drei_monate: 'Letzte drei Monate', sechs_monate: 'Letzte sechs Monate', quartal: 'Aktuelles Quartal', vorquartal: 'Vorheriges Quartal',
+  jahr: 'Aktuelles Jahr', letztes_jahr: 'Letztes Jahr', vorletztes_jahr: 'Vorletztes Jahr', gesamt: 'Gesamt' };
+let RANGES = {}, YEARS = {}, KURZ = 1, period = 'gesamt';
+function renderYears() {
+  const hmin = h => dur(h * 60);
+  $('#years').innerHTML = `<tr><th>Jahr</th><th>Tage</th><th>Ø pro Tag</th><th>Tage unter ${KURZ} h</th><th>Ø ohne diese Tage</th></tr>` +
+    (YEARS[period] || []).map(([y, n, avg, kurz, avgLang]) => `<tr><td>${y}</td><td>${n}</td><td>${hmin(avg)}</td><td>${kurz}</td><td>${kurz < n ? hmin(avgLang) : '–'}</td></tr>`).join('');
+}
+function renderPeriods() {
+  renderYears();
+  $('#per').innerHTML = PERIODS.map(([g, items]) => `<div class="g"><span>${g}</span><div class="seg">` +
+    items.map(([k, l]) => `<button data-p="${k}" title="${PNAME[k]}" class="${k === period ? 'on' : ''}">${l}</button>`).join('') + '</div></div>').join('');
+  const r = RANGES[period];
+  $('#percap').innerHTML = `<b>${PNAME[period]}</b>` + (period === 'gesamt' || !r ? '' : ` · ${dmy(day(r[0]))} – ${dmy(day(r[1] - 1))}`);
+}
+let group = '', open = new Set(), hidden = new Set(), shown = [], chartRows = [], firstTs = null;
+const cols = () => COLS[mode].filter(c => !hidden.has(c.k));
+const show = (c, r) => c.f ? c.f(r[c.k]) : r[c.k];
+
+function filtered() {
+  const cs = COLS[mode], ql = q.toLowerCase(), hideAlive = $('#alive').checked && mode === 'events';
+  const [pa, pb] = RANGES[period] || [0, Infinity];
+  const out = ROWS[mode].filter(r => {
+    const t = r.start ?? r.ts;
+    if (t < pa || t >= pb) return false;
+    if (hideAlive && r.event === 'alive') return false;
+    if (ql && !cs.some(c => String(show(c, r)).toLowerCase().includes(ql))) return false;
+    for (const c of cs) {
+      if (c.t === 'text' || c.t === 'cat') {
+        const v = F[c.k];
+        if (v && (c.t === 'cat' ? String(r[c.k]) !== v : !String(r[c.k]).toLowerCase().includes(v.toLowerCase()))) return false;
+      } else {
+        const a = F[c.k + '.a'], b = F[c.k + '.b'];
+        if (c.t === 'num') {
+          if (a && r[c.k] < +a) return false;
+          if (b && r[c.k] > +b) return false;
+        } else {
+          if (a && r[c.k] * 1000 < new Date(a + 'T00:00').getTime()) return false;
+          if (b && r[c.k] * 1000 >= new Date(b + 'T00:00').getTime() + 864e5) return false;
+        }
+      }
+    }
+    return true;
+  });
+  const minDay = (+$('#kurz').value || 0) * 60;  // eine Schwelle für Ausblenden und Jahrestabelle
+  if (mode !== 'blocks' || minDay <= 0) return out;
+  const tot = dayTotals(out);
+  return out.filter(r => tot.get(r.tag) >= minDay);
+}
+
+function dayTotals(rows) {
+  const t = new Map();
+  rows.forEach(r => t.set(r.tag, (t.get(r.tag) || 0) + (mode === 'blocks' ? r.dauer : 1)));
+  return t;
+}
+
+function sorted(rows) {
+  if (!sort.k) return rows;
+  const k = sort.k;
+  return [...rows].sort((a, b) => (typeof a[k] === 'number' ? a[k] - b[k] : String(a[k]).localeCompare(String(b[k]), 'de', { numeric: true })) * sort.dir);
+}
+
+function renderHead() {
+  const cs = cols();
+  const opts = c => [...new Set(ROWS[mode].map(r => r[c.k]))].sort((a, b) => String(a).localeCompare(String(b), 'de', { numeric: true }));
+  const f = c => {
+    if (c.t === 'text') return `<input data-f="${c.k}" value="${F[c.k] || ''}" placeholder="enthält…">`;
+    if (c.t === 'cat') return `<select data-f="${c.k}"><option value="">alle</option>${opts(c).map(o => `<option${F[c.k] === String(o) ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
+    const t = c.t === 'num' ? 'number' : 'date', u = c.t === 'num' ? ' (min)' : '';
+    return `<input type="${t}" data-f="${c.k}.a" value="${F[c.k + '.a'] || ''}" placeholder="von" title="von${u}"><input type="${t}" data-f="${c.k}.b" value="${F[c.k + '.b'] || ''}" placeholder="bis" title="bis${u}">`;
+  };
+  $('#head').innerHTML = `<tr>${cs.map(c => `<th data-s="${c.k}">${c.l}${sort.k === c.k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr>` +
+    `<tr class="f">${cs.map(c => `<th>${f(c)}</th>`).join('')}</tr>`;
+  $('#grp').innerHTML = '<option value="">keine</option>' + COLS[mode].filter(c => c.t !== 'num' && c.t !== 'date').map(c => `<option value="${c.k}"${group === c.k ? ' selected' : ''}>${c.l}</option>`).join('');
+  $('#cols').innerHTML = COLS[mode].map(c => `<label><input type="checkbox" data-c="${c.k}"${hidden.has(c.k) ? '' : ' checked'}> ${c.l}</label>`).join('');
+  $('#gapwrap').style.display = $('#derwrap').style.display = $('#kurzwrap').style.display = mode === 'blocks' ? '' : 'none';
+  $('#alivewrap').style.display = mode === 'events' ? '' : 'none';
+}
+
+function rowHtml(r, cs) {
+  return `<tr>${cs.map(c => `<td${c.t === 'num' ? ' class="num"' : ''}>${show(c, r)}</td>`).join('')}</tr>`;
+}
+
+function renderBody() {
+  const cs = cols(), rows = sorted(filtered());
+  shown = rows;
+  let html = '', info = '';
+  if (!rows.length) html = `<tr><td class="empty" colspan="${cs.length || 1}">Keine Einträge</td></tr>`;
+  else if (group) {
+    const gs = new Map();
+    rows.forEach(r => (gs.get(r[group]) || gs.set(r[group], []).get(r[group])).push(r));
+    const keys = [...gs.keys()].sort((a, b) => String(a).localeCompare(String(b), 'de', { numeric: true }));
+    for (const key of keys) {
+      const g = gs.get(key), o = open.has(String(key));
+      const sum = mode === 'blocks' ? ` · ${dur(g.reduce((s, r) => s + r.dauer, 0))}` : '';
+      html += `<tr class="g" data-g="${key}"><td colspan="${cs.length}">${o ? '▾' : '▸'} ${key} <span class="n">· ${g.length} Einträge${sum}</span></td></tr>`;
+      if (o) html += g.slice(0, 200).map(r => rowHtml(r, cs)).join('') + (g.length > 200 ? `<tr><td colspan="${cs.length}" class="empty">… ${g.length - 200} weitere (Filter nutzen)</td></tr>` : '');
+    }
+    info = `${keys.length} Gruppen, ${rows.length} Einträge`;
+  } else {
+    const pages = Math.ceil(rows.length / pageSize); page = Math.min(page, pages - 1);
+    // Tagestrenner nur bei zeitlicher Sortierung; die Summe zählt alle gefilterten Zeilen des Tages, nicht nur die der Seite.
+    const sep = ['tag', 'start', 'ende', 'ts'].includes(sort.k), tot = dayTotals(rows);
+    let prev = null;
+    html = rows.slice(page * pageSize, (page + 1) * pageSize).map(r => {
+      const head = sep && r.tag !== prev ? `<tr class="d"><td colspan="${cs.length}">${r.wochentag} ${dmy(r.tag)}${r.quelle === 'hergeleitet' ? ' ~' : ''} <span class="n">${r.quelle === 'hergeleitet' ? '· hergeleitet ' : ''}· ${r.woche.replace('-', ' ')} · ${mode === 'blocks' ? 'Gesamt ' + dur(tot.get(r.tag)) : tot.get(r.tag) + ' Ereignisse'}</span></td></tr>` : '';
+      prev = r.tag;
+      return head + rowHtml(r, cs);
+    }).join('');
+    info = `${page * pageSize + 1}–${Math.min(rows.length, (page + 1) * pageSize)} von ${rows.length}`;
+  }
+  $('#body').innerHTML = html;
+  $('#pager').innerHTML = group ? info : `<button id="prev"${page ? '' : ' disabled'}>←</button><button id="next"${(page + 1) * pageSize < rows.length ? '' : ' disabled'}>→</button>${info}
+    <select id="ps">${[25, 50, 100, 250].map(n => `<option${n === pageSize ? ' selected' : ''}>${n}</option>`).join('')}</select> pro Seite`;
+  renderKpis(rows);
+}
+
+function renderKpis(rows) {
+  let k;
+  if (mode === 'blocks') {
+    const days = new Set(rows.map(r => r.tag)), tot = rows.reduce((s, r) => s + r.dauer, 0);
+    k = [[days.size, 'Tage'], [rows.length, 'Blöcke'], [dur(tot), 'Gesamt'], [days.size ? dur(tot / days.size) : '–', 'Ø pro Tag'], [rows.length ? dur(tot / rows.length) : '–', 'Ø pro Block']];
+  } else k = [[rows.length, 'Ereignisse'], [new Set(rows.map(r => r.tag)).size, 'Tage']];
+  if (firstTs) k.push([`${dmy(day(firstTs))} ${hm(firstTs)}`, 'Erfasst seit']);
+  const heute = ROWS.blocks.filter(r => r.tag === day(Date.now() / 1000)).reduce((s, r) => s + r.dauer, 0);  // unabhängig von den Filtern
+  $('#kpis').innerHTML = k.map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('') +
+    `<div class="kpi heute"><b>${dur(heute)}</b><span>Heute</span></div>`;
+  chartRows = rows; renderChart();
+}
+
+// Lückenlose Tagesachse: Balken je Kalendertag, darunter Tag, KW und Monat.
+function renderChart() {
+  const svg = $('#chart'), rows = chartRows;
+  if (mode !== 'blocks' || !rows.length) { svg.style.display = 'none'; return; }
+  svg.style.display = '';
+  const per = new Map(); rows.forEach(r => { const p = per.get(r.tag) || { v: 0, n: 0 }; p.v += r.dauer; p.n++; per.set(r.tag, p); });
+  const tags = [...per.keys()].sort(), days = [];
+  for (const d = new Date(tags[0] + 'T12:00'), end = new Date(tags.at(-1) + 'T12:00'); d <= end; d.setDate(d.getDate() + 1)) days.push(day(d.getTime() / 1000));
+  const view = days.slice(-120), W = svg.clientWidth || 900, H = 170, top = 8, ax = 52, n = view.length;
+  const bw = (W - 16) / n, mx = Math.max(1, ...view.map(t => per.get(t)?.v || 0)), ph = H - top - ax;
+  const every = Math.ceil(18 / bw);
+  let s = '';
+  view.forEach((t, i) => {
+    const d = new Date(t + 'T12:00'), x = 8 + i * bw, p = per.get(t), v = p?.v || 0, h = v / mx * ph;
+    const monday = d.getDay() === 1 || i === 0, first = d.getDate() === 1 || i === 0;
+    if (monday) s += `<line x1="${x}" x2="${x}" y1="${top}" y2="${H - 14}"/>`;
+    s += `<rect class="b${d.getDay() % 6 === 0 ? ' we' : ''}" x="${x + bw * .1}" y="${top + ph - h}" width="${Math.max(bw * .8, 1)}" height="${h}"/>`;
+    if (i % every === 0) s += `<text x="${x + bw / 2}" y="${top + ph + 12}" text-anchor="middle">${pad(d.getDate())}</text>`;
+    if (monday) s += `<text x="${x + 2}" y="${top + ph + 25}">${isoWeek(d).split('-')[1]}</text>`;
+    if (first) s += `<text x="${x + 2}" y="${top + ph + 40}" style="font-weight:700">${d.toLocaleDateString('de-DE', { month: 'short', year: 'numeric' })}</text>`;
+    s += `<rect class="h" x="${x}" y="0" width="${bw}" height="${H - 14}" data-t="${t}" data-v="${v}" data-n="${p?.n || 0}"/>`;
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
+}
+
+const tip = $('#tip');
+$('#chart').addEventListener('mousemove', e => {
+  const t = e.target.dataset?.t;
+  if (!t) { tip.style.display = 'none'; return; }
+  const d = new Date(t + 'T12:00'), v = +e.target.dataset.v, n = e.target.dataset.n;
+  tip.innerHTML = `<b>${WD[d.getDay()]} ${dmy(t)}</b><br>${isoWeek(d).replace('-', ' ')} · ${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}<br>${v ? `${dur(v)} · ${n} ${n == 1 ? 'Block' : 'Blöcke'}` : 'keine Anwesenheit erfasst'}`;
+  tip.style.display = 'block';
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = e.clientY + 14 + 'px';
+});
+$('#chart').addEventListener('mouseleave', () => tip.style.display = 'none');
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderChart, 100); });
+
+function setMode(m) {
+  mode = m; F = {}; q = ''; $('#q').value = ''; sort = m === 'blocks' ? { k: 'start', dir: -1 } : { k: 'ts', dir: -1 }; group = ''; open.clear(); hidden.clear(); page = 0;
+  $('#m-blocks').classList.toggle('on', m === 'blocks'); $('#m-events').classList.toggle('on', m === 'events');
+  renderHead(); renderBody();
+}
+
+function csv() {
+  const cs = cols(), esc = v => `"${String(v).replace(/"/g, '""')}"`;
+  const out = [cs.map(c => esc(c.l)).join(';'), ...shown.map(r => cs.map(c => esc(show(c, r))).join(';'))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + out], { type: 'text/csv' })); a.download = `session-${mode}.csv`; a.click();
+}
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'q') q = t.value;
+  else if (t.dataset.f !== undefined) F[t.dataset.f] = t.value;
+  else if (t.dataset.c !== undefined) { t.checked ? hidden.delete(t.dataset.c) : hidden.add(t.dataset.c); renderHead(); }
+  else if (t.id !== 'alive' && t.id !== 'kurz') return;
+  page = 0; renderBody();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'grp') { group = t.value; open.clear(); page = 0; renderBody(); }
+  else if (t.id === 'ps') { pageSize = +t.value; page = 0; renderBody(); }
+  else if (t.dataset.f !== undefined && t.tagName === 'SELECT') { F[t.dataset.f] = t.value; page = 0; renderBody(); }
+});
+document.addEventListener('click', e => {
+  const t = e.target, th = t.closest('th[data-s]'), g = t.closest('tr.g');
+  if (th) { sort = { k: th.dataset.s, dir: sort.k === th.dataset.s ? -sort.dir : 1 }; renderHead(); renderBody(); }
+  else if (g) { const k = g.dataset.g; open.has(k) ? open.delete(k) : open.add(k); renderBody(); }
+  else if (t.id === 'prev') { page--; renderBody(); }
+  else if (t.id === 'next') { page++; renderBody(); }
+  else if (t.dataset.p) { period = t.dataset.p; page = 0; renderPeriods(); renderBody(); }
+  else if (t.id === 'm-blocks') setMode('blocks');
+  else if (t.id === 'm-events') setMode('events');
+  else if (t.id === 'reset') { F = {}; q = ''; $('#q').value = ''; $('#kurz').value = 1; load(); }
+  else if (t.id === 'csv') csv();
+});
+
+function load() {
+  const g = $('#gap').value === '' ? 5 : Math.max(0, +$('#gap').value);
+  const kz = $('#kurz').value === '' || +$('#kurz').value < 0 ? 1 : +$('#kurz').value;
+  fetch('/api/data?gap=' + g + '&kurz=' + kz + '&derived=' + ($('#der').checked ? 1 : 0)).then(r => r.json()).then(d => {
+    $('#test').style.display = d.test ? 'block' : 'none';
+    YEARS = d.years; KURZ = d.kurz_h;
+    RANGES = d.ranges; renderPeriods();
+    firstTs = d.events.length ? d.events[0][0] : null;
+    ROWS.events = d.events.map(([ts, event]) => ({ ts, event, ...derive(ts) }));
+    ROWS.blocks = d.blocks.map(([a, b, quelle]) => ({ start: a, ende: b, quelle, dauer: Math.round((b - a) / 60), ...derive(a) }));
+    renderHead(); renderBody();
+  });
+}
+document.addEventListener('change', e => { if (e.target.id === 'gap' || e.target.id === 'der' || e.target.id === 'kurz') load(); });
+load();
+setInterval(() => { if (!document.hidden) load(); }, 60000);  // Heute-Kachel und Zeiträume (Mitternacht) aktuell halten
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>

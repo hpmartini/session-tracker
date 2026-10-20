@@ -1,0 +1,152 @@
+#!/usr/bin/env -S python3 -I
+"""Leitet rückwirkend Arbeitszeit-Indizien ab und schreibt sie in events.sqlite, Tabelle `derived`.
+Aufruf: session-backfill [quelle ...] | --list.  Rührt `events` nicht an, Läufe sind idempotent (je Quelle ersetzt).
+Nicht enthalten: SSH (wtmp/last, sshd-Logs). Nur Zeitstempel, nie URLs oder Inhalte."""
+import glob, json, os, re, shutil, sqlite3, subprocess, sys, tempfile, time
+
+HOME = os.path.expanduser('~')
+DB = HOME + '/.local/share/session-tracker/events.sqlite'
+APPLE = 978307200       # Core Data / Cocoa-Epoche -> Unix
+CHROME = 11644473600    # WebKit-Epoche (1601) -> Unix
+MACHINE_SINCE = 1628550000  # 2021-08-10: erster Eintrag der zsh-History = Einrichtung dieses Macs; ältere mtimes stammen von kopierten Dateien
+TMP = tempfile.mkdtemp(prefix='backfill-')
+
+
+def snapshot(path):
+    """Kopie samt -wal/-shm, weil die Browser/Knowledge-DBs im Betrieb gesperrt sind."""
+    dst = os.path.join(TMP, str(abs(hash(path))) + '.db')
+    for sfx in ('', '-wal', '-shm'):
+        if os.path.exists(path + sfx):
+            shutil.copy(path + sfx, dst + sfx)
+    return sqlite3.connect(dst)
+
+
+def knowledgec_app():
+    """Vordergrund-App-Nutzung dieses Macs (ZDEVICEID leer = lokal, sonst iPhone/iPad per Sync)."""
+    c = snapshot(HOME + '/Library/Application Support/Knowledge/knowledgeC.db')
+    q = """SELECT o.ZSTARTDATE, o.ZENDDATE FROM ZOBJECT o LEFT JOIN ZSOURCE s ON o.ZSOURCE = s.Z_PK
+           WHERE o.ZSTREAMNAME = '/app/usage' AND s.ZDEVICEID IS NULL AND o.ZENDDATE >= o.ZSTARTDATE"""
+    return [(int(a + APPLE), int(b + APPLE)) for a, b in c.execute(q)]
+
+
+def unified_log_unlocked():
+    """Entsperrt-Intervalle aus loginwindow (Unified Log, ca. 30 Tage Rückblick)."""
+    out = subprocess.run(['log', 'show', '--start', '2026-01-01', '--style', 'compact', '--predicate',
+                          'process == "loginwindow" AND eventMessage CONTAINS "sendDistributedNotification: com.apple.screenIs"'],
+                         capture_output=True, text=True, timeout=900).stdout
+    ev = []
+    for line in out.splitlines():
+        m = re.match(r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d+ .*com\.apple\.screenIs(Locked|Unlocked)', line)
+        if m:
+            ev.append((int(time.mktime(time.strptime(m[1], '%Y-%m-%d %H:%M:%S'))), m[2]))
+    ivs, since = [], None
+    for ts, kind in sorted(ev):
+        if kind == 'Unlocked' and since is None:
+            since = ts
+        elif kind == 'Locked' and since is not None:
+            ivs.append((since, ts)); since = None
+    return ivs  # offener Schluss entfällt: ab dort deckt der Tracker ab
+
+
+def claude_prompts():
+    """Eigene Eingaben in Claude Code (history.jsonl; Transkript-Ordner bewusst nicht gescannt, gleiche Aktivität)."""
+    pts = []
+    for line in open(HOME + '/.claude/history.jsonl', errors='replace'):
+        try:
+            pts.append(int(json.loads(line)['timestamp'] // 1000))
+        except (ValueError, KeyError):
+            pass
+    return [(t, t) for t in pts]
+
+
+def shell_history():
+    """zsh-Befehle mit Zeitstempel (erweitertes Format). Kann SSH-Eingaben nicht von lokalen trennen."""
+    raw = open(HOME + '/.zsh_history', 'rb').read().decode('utf-8', 'replace')
+    return [(int(t), int(t)) for t in re.findall(r'^: (\d{9,11}):\d+;', raw, re.M)]
+
+
+def _chromium(name):
+    ivs = []
+    for p in glob.glob(f'{HOME}/Library/Application Support/{name}/*/History') + glob.glob(f'{HOME}/Library/Application Support/{name}/History'):
+        c = snapshot(p)
+        # visit_source 0 = per Sync von anderen Geräten; fehlt der Eintrag, war es ein lokaler Besuch
+        q = 'SELECT v.visit_time FROM visits v LEFT JOIN visit_source s ON s.id = v.id WHERE s.source IS NULL OR s.source != 0'
+        try:
+            ivs += [(int(t / 1e6 - CHROME),) * 2 for (t,) in c.execute(q)]
+        except sqlite3.Error:
+            pass
+    return ivs
+
+
+def browser_chrome(): return _chromium('Google/Chrome')
+def browser_arc(): return _chromium('Arc/User Data')
+def browser_brave(): return _chromium('BraveSoftware/Brave-Browser')
+def browser_edge(): return _chromium('Microsoft Edge')
+
+
+def browser_safari():
+    c = snapshot(HOME + '/Library/Safari/History.db')
+    cols = {r[1] for r in c.execute('PRAGMA table_info(history_visits)')}
+    q = 'SELECT visit_time FROM history_visits' + (' WHERE origin = 0' if 'origin' in cols else '')  # origin 0 = lokal
+    return [(int(t + APPLE),) * 2 for (t,) in c.execute(q)]
+
+
+def browser_firefox():
+    ivs = []
+    for p in glob.glob(HOME + '/Library/Application Support/Firefox/Profiles/*/places.sqlite'):
+        ivs += [(int(t / 1e6),) * 2 for (t,) in snapshot(p).execute('SELECT visit_date FROM moz_historyvisits')]
+    return ivs
+
+
+def downloads():
+    """Download-Zeitpunkte (Quarantäne-Datenbank), von Hand ausgelöst."""
+    c = snapshot(HOME + '/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2')
+    return [(int(t + APPLE),) * 2 for (t,) in c.execute('SELECT LSQuarantineTimeStamp FROM LSQuarantineEvent')]
+
+
+SKIP_DIRS = {'node_modules', '.git', '.next', 'dist', 'build', '.cache', '__pycache__', 'target', '.venv', 'venv', '.turbo', 'Pods', '.gradle'}
+ROOTS = ['PROJECTS', 'Documents', 'Desktop', 'MAGOS']  # ~/.claude bewusst nicht: überwiegend Maschinen-Schreibzugriffe
+
+
+def file_changes():
+    """Änderungszeit (mtime) von Dateien, pro Minute. Nur der letzte Stand je Datei, daher grobe Näherung;
+    Spotlight (kMDItemLastUsedDate) ist auf diesem Rechner für diese Ordner leer."""
+    minutes = set()
+    for r in ROOTS:
+        for d, dirs, files in os.walk(f'{HOME}/{r}'):
+            dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
+            for f in files:
+                try:
+                    minutes.add(int(os.lstat(os.path.join(d, f)).st_mtime) // 60 * 60)
+                except OSError:
+                    pass
+    return [(t, t) for t in minutes]
+
+
+# Passiv = Rechner entsperrt/Bildschirm an, belegt keine konkrete Tätigkeit. Aktiv = eigene Handlung.
+SOURCES = {f.__name__: f for f in (knowledgec_app, unified_log_unlocked, claude_prompts, shell_history, browser_chrome,
+                                   browser_arc, browser_brave, browser_edge, browser_safari, browser_firefox, downloads)}  # file_changes bewusst raus: mtime ist überwiegend maschinell (Sync, Builds, Cron)
+
+
+def store(db, name, ivs):
+    ivs = sorted({(a, b) for a, b in ivs if MACHINE_SINCE < a <= b < time.time() + 60})
+    db.execute('DELETE FROM derived WHERE source = ?', (name,))
+    db.executemany('INSERT INTO derived(ts_from, ts_to, source) VALUES (?,?,?)', [(a, b, name) for a, b in ivs])
+    db.commit()
+    return ivs
+
+
+if __name__ == '__main__':
+    if '--list' in sys.argv:
+        print('\n'.join(SOURCES)); sys.exit()
+    db = sqlite3.connect(DB, timeout=30)
+    db.execute('CREATE TABLE IF NOT EXISTS derived(ts_from INTEGER NOT NULL, ts_to INTEGER NOT NULL, source TEXT NOT NULL)')
+    db.execute('CREATE INDEX IF NOT EXISTS derived_source ON derived(source)')
+    fmt = lambda t: time.strftime('%Y-%m-%d %H:%M', time.localtime(t))
+    for name in sys.argv[1:] or SOURCES:
+        try:
+            ivs = store(db, name, SOURCES[name]())
+            print(f'{name:22} {len(ivs):>7}  {fmt(ivs[0][0]) if ivs else "-"} .. {fmt(ivs[-1][1]) if ivs else "-"}')
+        except Exception as e:  # eine unlesbare Quelle (z. B. fehlende Rechte) stoppt die anderen nicht
+            print(f'{name:22} FEHLER {type(e).__name__}: {e}')
+    shutil.rmtree(TMP, ignore_errors=True)
