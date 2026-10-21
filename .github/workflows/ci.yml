@@ -1,0 +1,18 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  checks:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report selftest
+        run: bin/session-report --selftest
+      - name: Typecheck tracker
+        run: swiftc -typecheck tracker/session-tracker.swift
+      - name: Syntax of installer and Python tools
+        run: |
+          sh -n install.sh
+          python3 -m py_compile bin/session-dashboard bin/session-backfill scripts/make-demo-db.py
