@@ -1,24 +1,24 @@
 # Changelog
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No tagged releases yet.
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-- README with screenshots (synthetic demo data), badges, uninstall steps and example output.
-- `scripts/make-demo-db.py` writes a fake database for demos and screenshots.
-- Dashboard browser tests (Playwright) for period filter, midnight split, year table and threshold field, run in CI.
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and pull request templates, CI workflow.
+## [0.1.0] - 2026-10-21
 
-### Changed
-- LaunchAgent labels renamed from `de.martini-labs.*` to `dev.hpmartini.*`. An existing install under the old labels keeps running next to a new one: remove the old agents first (`launchctl bootout gui/$(id -u)/de.martini-labs.session-tracker`, same for `session-dashboard`, then delete their plists in `~/Library/LaunchAgents`).
-
-## 2026-10-19
+First public version.
 
 ### Added
-- Initial public version: tracker, `session-report`, dashboard, `session-backfill`, installer, MIT license.
-- `session-report --zeitraum` with the 13 periods shared with the dashboard.
+- Tracker (`tracker/session-tracker.swift`): LaunchAgent that writes login, lock, sleep, wake, display and heartbeat events to a local SQLite file.
+- `session-report`: presence blocks, pauses under a threshold merged (default 5 min), per-day totals and a per-year table (average, days under a threshold, average without them). `--zeitraum` selects one of 13 periods shared with the dashboard.
+- `session-dashboard` on `127.0.0.1:8765`: blocks and raw events, filters, CSV export, a "today" tile that refreshes every minute, 13 period selectors and a threshold field for short days. Blocks are split at local midnight and the year table follows the selected period, matching `session-report`.
+- `session-backfill` (optional): estimated working times from before tracking started, stored separately and marked as derived. Derived data is off by default.
+- `install.sh`, MIT license, README with screenshots (synthetic demo data), `scripts/make-demo-db.py` for fake data.
+- `session-report --selftest`, Playwright browser tests for the dashboard (period filter, midnight split, year table, threshold field) and a CI workflow.
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and pull request templates.
 
 ### Changed
-- Derived data is off by default in the dashboard.
-- Dashboard blocks are split at local midnight and the year table follows the selected period, matching `session-report`.
+- LaunchAgent labels are `dev.hpmartini.*` (earlier development builds used `de.martini-labs.*`). An existing install under the old labels keeps running next to a new one: remove the old agents first (`launchctl bootout gui/$(id -u)/de.martini-labs.session-tracker`, same for `session-dashboard`, then delete their plists in `~/Library/LaunchAgents`).
+
+[Unreleased]: https://github.com/hpmartini/session-tracker/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/hpmartini/session-tracker/releases/tag/v0.1.0
