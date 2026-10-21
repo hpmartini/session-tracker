@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
 ### Changed
 - Dashboard caches the derived blocks per pause threshold (`gap`); the cache is dropped when the `derived` table changes (backfill) or the first tracked event moves. Tracked blocks are never cached, so new events show up immediately. Warm `/api/data?derived=1` computation dropped from about 0.3 s to about 0.07 s.
 
@@ -23,5 +25,6 @@ First public version.
 ### Changed
 - LaunchAgent labels are `dev.hpmartini.*` (earlier development builds used `de.martini-labs.*`). An existing install under the old labels keeps running next to a new one: remove the old agents first (`launchctl bootout gui/$(id -u)/de.martini-labs.session-tracker`, same for `session-dashboard`, then delete their plists in `~/Library/LaunchAgents`).
 
-[Unreleased]: https://github.com/hpmartini/session-tracker/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hpmartini/session-tracker/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/hpmartini/session-tracker/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hpmartini/session-tracker/releases/tag/v0.1.0
