@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ## [Unreleased]
 
+### Changed
+- Dashboard caches the derived blocks per pause threshold (`gap`); the cache is dropped when the `derived` table changes (backfill) or the first tracked event moves. Tracked blocks are never cached, so new events show up immediately. Warm `/api/data?derived=1` computation dropped from about 0.3 s to about 0.07 s.
+
 ## [0.1.0] - 2026-10-21
 
 First public version.

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -I
 """Dashboard für den session-tracker. Aufruf: session-dashboard [port]  ->  http://127.0.0.1:8765"""
-import datetime, http.server, importlib.util, json, os, sqlite3, sys, time
+import datetime, http.server, importlib.util, json, os, sqlite3, sys, threading, time
 from urllib.parse import parse_qs, urlsplit
 from importlib.machinery import SourceFileLoader
 
@@ -13,15 +13,39 @@ _spec = importlib.util.spec_from_loader('session_report', SourceFileLoader('sess
 report = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(report)
 
 
+def split_midnight(blocks, quelle):
+    """Blöcke an lokaler Mitternacht teilen wie session-report; die Zeitraumgrenzen liegen auf Mitternacht, der Client muss nicht mehr kürzen."""
+    return [(int(x.timestamp()), int(y.timestamp()), quelle) for a, b in blocks for parts in report.per_day([(a, b)]).values() for x, y in parts]
+
+
+_cache, _lock = {}, threading.Lock()  # gap_min -> (Signatur, hergeleitete Blöcke); nur die teure hergeleitete Seite, getrackte Blöcke sind billig und immer frisch
+
+
+def derived_cached(db, cutoff, gap_min):
+    """Hergeleitete Blöcke je gap. Verfällt, wenn `derived` sich ändert (Backfill: Anzahl, höchste rowid, späteste Zeit) oder der Cutoff (erstes Tracker-Event) wandert."""
+    try:
+        sig = (cutoff, *db.execute('SELECT COUNT(*), COALESCE(MAX(rowid), 0), COALESCE(MAX(ts_to), 0) FROM derived').fetchone())
+    except sqlite3.OperationalError:  # Tabelle fehlt: noch kein Backfill gelaufen
+        return []
+    with _lock:
+        hit = _cache.get(gap_min)
+    if hit and hit[0] == sig:
+        return hit[1]
+    blocks = split_midnight(report.derived_blocks(db, cutoff, gap_min * 60), 'hergeleitet')
+    with _lock:
+        if len(_cache) >= 8:  # shortcut: jeder gap-Wert ist ein Eintrag; Obergrenze statt LRU, die Eingabe ist ein einzelnes Zahlenfeld
+            _cache.clear()
+        _cache[gap_min] = (sig, blocks)
+    return blocks
+
+
 def data(gap_min, derived, kurz):
     db = sqlite3.connect(f'file:{DB}?mode=ro', uri=True)
     rows = db.execute('SELECT ts, event FROM events ORDER BY ts, rowid').fetchall()
     now = int(time.time())
-    blocks = [(a, b, 'getrackt') for a, b in report.merge(report.intervals(rows, now), gap_min * 60)]
+    blocks = split_midnight(report.merge(report.intervals(rows, now), gap_min * 60), 'getrackt')
     if derived:
-        blocks = [(a, b, 'hergeleitet') for a, b in report.derived_blocks(db, rows[0][0] if rows else now, gap_min * 60)] + blocks
-    # Blöcke an lokaler Mitternacht teilen wie session-report; die Zeitraumgrenzen liegen auf Mitternacht, der Client muss nicht mehr kürzen.
-    blocks = [(int(x.timestamp()), int(y.timestamp()), q) for a, b, q in blocks for parts in report.per_day([(a, b)]).values() for x, y in parts]
+        blocks = derived_cached(db, rows[0][0] if rows else now, gap_min) + blocks
     ivs = [(a, b) for a, b, _ in blocks]
     years = {k: report.year_stats(report.clip(ivs, lo, hi), kurz) for k, (lo, hi) in report.period_epochs(datetime.date.today()).items()}
     return {'events': rows, 'blocks': blocks, 'gap': gap_min, 'years': years, 'kurz_h': kurz, 'ranges': report.period_epochs(datetime.date.today()), 'test': 'SESSION_DB' in os.environ}
