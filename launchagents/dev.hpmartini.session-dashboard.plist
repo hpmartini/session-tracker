@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>de.martini-labs.session-dashboard</string>
+  <string>dev.hpmartini.session-dashboard</string>
   <key>ProgramArguments</key>
   <array>
     <string>__HOME__/.local/bin/session-dashboard</string>

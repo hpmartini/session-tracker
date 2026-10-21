@@ -14,7 +14,7 @@ swiftc -O -o "$bin/session-tracker" "$here/tracker/session-tracker.swift"
 "$bin/session-report" --selftest
 
 for name in session-tracker session-dashboard; do
-  label="de.martini-labs.$name"
+  label="dev.hpmartini.$name"
   sed "s|__HOME__|$HOME|g" "$here/launchagents/$label.plist" > "$agents/$label.plist"
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$agents/$label.plist"
