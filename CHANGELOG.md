@@ -7,6 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No tag
 ### Added
 - README with screenshots (synthetic demo data), badges, uninstall steps and example output.
 - `scripts/make-demo-db.py` writes a fake database for demos and screenshots.
+- Dashboard browser tests (Playwright) for period filter, midnight split, year table and threshold field, run in CI.
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and pull request templates, CI workflow.
 
 ### Changed

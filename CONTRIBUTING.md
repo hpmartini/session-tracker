@@ -13,6 +13,7 @@ Thanks for helping. This is a small project, so the process is small too.
 git clone https://github.com/hpmartini/session-tracker.git
 cd session-tracker
 bin/session-report --selftest        # must print "selftest ok"
+npm ci && npx playwright test        # dashboard browser tests (needs Node 18+ and Google Chrome)
 swiftc -typecheck tracker/session-tracker.swift
 sh -n install.sh
 python3 scripts/make-demo-db.py /tmp/demo.sqlite   # fake data for the dashboard, see README

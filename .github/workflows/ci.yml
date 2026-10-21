@@ -16,3 +16,13 @@ jobs:
         run: |
           sh -n install.sh
           python3 -m py_compile bin/session-dashboard bin/session-backfill scripts/make-demo-db.py
+  dashboard-tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Dashboard browser tests (installed Chrome, demo database)
+        run: npx playwright test
