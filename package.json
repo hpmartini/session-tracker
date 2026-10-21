@@ -1,0 +1,11 @@
+{
+  "name": "session-tracker-tests",
+  "private": true,
+  "description": "Browser tests for the session-tracker dashboard (dev only; the tools themselves have no dependencies)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

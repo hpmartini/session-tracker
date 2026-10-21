@@ -93,7 +93,7 @@ Only timestamps are read, never URLs, file contents or commands. The backfill re
 
 ## Tests
 
-`session-report --selftest` covers block building, merging, derived blocks, the year table, clipping and the period definitions. CI also type-checks the Swift tracker and syntax-checks the installer. There are no automated tests for the dashboard UI.
+`session-report --selftest` covers block building, merging, derived blocks, the year table, clipping and the period definitions. CI also type-checks the Swift tracker and syntax-checks the installer. The dashboard has browser tests (Playwright, installed Chrome, synthetic demo database): `npm ci && npx playwright test`. They check the period filter for all 13 periods, the midnight split, the year table and the threshold field against values computed from the raw API data.
 
 ## Contributing
 
