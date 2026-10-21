@@ -12,6 +12,8 @@ jobs:
         run: bin/session-report --selftest
       - name: Typecheck tracker
         run: swiftc -typecheck tracker/session-tracker.swift
+      - name: Dashboard cache tests
+        run: python3 -I -m unittest discover -s tests
       - name: Syntax of installer and Python tools
         run: |
           sh -n install.sh
