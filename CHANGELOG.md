@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ## [Unreleased]
 
+### Fixed
+- `install.sh` retries `launchctl bootstrap` up to 5 times; it could fail once with `Bootstrap failed: 5: Input/output error` right after `bootout`.
+
 ## [0.1.1] - 2026-10-21
 
 ### Changed
