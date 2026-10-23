@@ -8,6 +8,8 @@
   <string>Session Tracker</string>
   <key>CFBundleExecutable</key>
   <string>session-menubar</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSUIElement</key>

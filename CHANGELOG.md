@@ -4,9 +4,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
 ### Added
 - Menubar app (`tracker/session-menubar.swift`, installed as `~/Applications/Session Tracker.app` so Raycast and Spotlight find it, started at login by the LaunchAgent `dev.hpmartini.session-menubar`): today's total in the menu bar, a menu with total, sessions and start, and "Dashboard öffnen" (starts the dashboard agent if it is not reachable).
 - `session-report --heute --json`: today's numbers as JSON; `session-report` honours `SESSION_DB` like the dashboard.
+
+- App icon (`assets/icon.svg`, rendered to `assets/AppIcon.icns`) for `Session Tracker.app`.
 
 ### Fixed
 - `install.sh` retries `launchctl bootstrap` up to 5 times; it could fail once with `Bootstrap failed: 5: Input/output error` right after `bootout`.
@@ -32,6 +36,7 @@ First public version.
 ### Changed
 - LaunchAgent labels are `dev.hpmartini.*` (earlier development builds used `de.martini-labs.*`). An existing install under the old labels keeps running next to a new one: remove the old agents first (`launchctl bootout gui/$(id -u)/de.martini-labs.session-tracker`, same for `session-dashboard`, then delete their plists in `~/Library/LaunchAgents`).
 
-[Unreleased]: https://github.com/hpmartini/session-tracker/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/hpmartini/session-tracker/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/hpmartini/session-tracker/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/hpmartini/session-tracker/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hpmartini/session-tracker/releases/tag/v0.1.0

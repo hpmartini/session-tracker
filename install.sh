@@ -7,12 +7,13 @@ bin="$HOME/.local/bin"
 share="$HOME/.local/share/session-tracker"
 agents="$HOME/Library/LaunchAgents"
 app="$HOME/Applications/Session Tracker.app"  # a bundle, so Raycast and Spotlight find the menubar
-mkdir -p "$bin" "$share" "$agents" "$app/Contents/MacOS"
+mkdir -p "$bin" "$share" "$agents" "$app/Contents/MacOS" "$app/Contents/Resources"
 
 install -m 755 "$here"/bin/session-* "$bin/"
 install -m 644 "$here/dashboard/dashboard.html" "$share/"
 swiftc -O -o "$bin/session-tracker" "$here/tracker/session-tracker.swift"
 install -m 644 "$here/tracker/session-menubar-Info.plist" "$app/Contents/Info.plist"
+install -m 644 "$here/assets/AppIcon.icns" "$app/Contents/Resources/"
 swiftc -O -o "$app/Contents/MacOS/session-menubar" "$here/tracker/session-menubar.swift"
 rm -f "$bin/session-menubar"  # lived here before the app bundle
 mdimport "$app" 2>/dev/null || true  # Spotlight/Raycast find it right away instead of at the next index run

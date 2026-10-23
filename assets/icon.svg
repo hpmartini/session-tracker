@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16264a"/>
+      <stop offset="1" stop-color="#070d1f"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="270" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="64"/>
+  <!-- today's presence: a cyan arc, 270 degrees from 12 o'clock -->
+  <path d="M512 242 A270 270 0 1 1 242 512" fill="none" stroke="#22d3ee" stroke-width="64" stroke-linecap="round"/>
+  <path d="M512 512 V352 M512 512 L630 580" fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="30" fill="#22d3ee"/>
+</svg>
