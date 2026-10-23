@@ -5,73 +5,173 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Session Tracker</title>
 <style>
-:root{--bg:#fff;--fg:#1a1a1a;--mut:#667;--line:#dde;--acc:#2457d6;--card:#f5f6f9;--bar:#2457d6}
-@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e6e6;--mut:#9aa;--line:#2c3036;--acc:#7ba0ff;--card:#1c1f25;--bar:#7ba0ff}}
-*{box-sizing:border-box}
-body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif}
-h1{font-size:18px;margin:0 0 12px}
-.bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:12px}
-.bar label{color:var(--mut);display:flex;gap:4px;align-items:center}
-input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
-button{cursor:pointer}button.on{background:var(--acc);color:var(--bg);border-color:var(--acc)}
-button:disabled{opacity:.4;cursor:default}
-.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.kpi{background:var(--card);border-radius:8px;padding:8px 12px;min-width:110px}
-.kpi.heute{margin-left:auto;text-align:right;padding:14px 26px;border:2px solid var(--acc)}.kpi.heute b{font-size:38px;line-height:1.1}.kpi.heute span{font-size:14px}
-.per{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:flex-end;margin-bottom:6px}.per .g{display:flex;flex-direction:column;gap:3px}
-.per .g>span{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-.per .seg{display:flex}.per .seg button{border-radius:0;margin-left:-1px;padding:4px 12px}.per .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}.per .seg button:last-child{border-radius:0 6px 6px 0}.per .seg button:only-child{border-radius:6px}
-#percap{color:var(--mut);margin-bottom:10px}#percap b{color:var(--fg)}.kpi b{display:block;font-size:20px}.kpi span{color:var(--mut);font-size:12px}
-#chart{width:100%;height:170px;margin-bottom:12px;background:var(--card);border-radius:8px;display:block}
-#chart rect.b{fill:var(--bar)}#chart rect.b.we{opacity:.5}#chart rect.h{fill:transparent}#chart rect.h:hover{fill:var(--line);opacity:.5}
-#chart text{fill:var(--mut);font-size:10px}#chart line{stroke:var(--line)}
-#tip{position:fixed;z-index:9;pointer-events:none;background:var(--fg);color:var(--bg);padding:6px 10px;border-radius:6px;font-size:12px;line-height:1.5;display:none}
-#test{background:#c0392b;color:#fff;padding:8px 12px;border-radius:6px;margin-bottom:12px;display:none}
-tr.d td{background:var(--card);font-weight:600;border-top:2px solid var(--acc)}
-tr.d .n{color:var(--mut);font-weight:400}
-.wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+/* Dark-only glass look on a navy gradient; cyan accent carries all emphasis. */
+:root{
+  color-scheme:dark;
+  --navy-deep:#08203E;--navy:#0B2545;--navy-2:#0E2A50;
+  --cyan:#279AF1;--cyan-lite:#5FB2F6;--lblue:#B5F0FF;
+  --ink-strong:#E9F3FE;--ink:#C6D8EC;--ink-mute:#8FA9C6;--ink-faint:#6E8BAA;
+  --glass:rgba(255,255,255,.055);--glass-2:rgba(255,255,255,.03);
+  --brd:rgba(181,240,255,.14);--brd-strong:rgba(95,178,246,.45);
+  --r-card:22px;--r-md:14px;--r-pill:9999px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --topbar:60px;
+  --grad:linear-gradient(315deg,var(--cyan),var(--lblue));
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;min-height:100vh;color:var(--ink);
+  background:linear-gradient(180deg,var(--navy-deep),var(--navy) 42%,var(--navy-2)) fixed;
+  font:14px/1.6 Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;
+}
+b,strong{color:#fff;font-weight:700}
+:focus-visible{outline:2px solid var(--cyan-lite);outline-offset:2px;border-radius:4px}
+.blobs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.blobs::before,.blobs::after{content:"";position:absolute;border-radius:50%;filter:blur(90px);opacity:.16}
+.blobs::before{width:640px;height:640px;top:-180px;right:-120px;background:radial-gradient(circle,var(--cyan),transparent 70%)}
+.blobs::after{width:500px;height:500px;bottom:-160px;left:-140px;background:radial-gradient(circle,var(--lblue),transparent 70%)}
+@media(max-width:768px){.blobs{display:none}}
+
+/* ---------- Topbar + period nav ---------- */
+.topbar{
+  position:sticky;top:0;z-index:60;height:var(--topbar);display:flex;align-items:center;gap:14px;
+  padding:0 clamp(14px,3vw,28px);background:rgba(8,32,62,.72);
+  backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid var(--brd);
+}
+.logo{width:34px;height:34px;border-radius:9px;flex:none;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#04223f;font-size:12px;font-weight:900}
+.tb-title{font-size:15px;font-weight:700;color:#fff;line-height:1.2}
+.tb-sub{font-size:11.5px;font-weight:500;color:var(--ink-mute);line-height:1.2}
+.tb-spacer{flex:1}
+.pernav{
+  position:sticky;top:var(--topbar);z-index:55;display:flex;gap:6px 22px;align-items:flex-end;flex-wrap:wrap;
+  padding:10px clamp(14px,3vw,28px);background:rgba(8,32,62,.66);
+  backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid var(--brd);
+}
+.per{display:contents}
+.per .g{display:flex;flex-direction:column;gap:3px}
+.per .g>span{color:var(--ink-faint);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.per .seg{display:flex;gap:4px}
+.per .seg button{padding:4px 12px;font-size:12.5px;border-color:transparent;background:none;color:var(--ink-mute)}
+.per .seg button:hover{color:var(--ink-strong);border-color:var(--brd)}
+.per .seg button.on,.mode button.on{background:var(--grad);color:#04223f;border-color:transparent}
+
+main{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:24px clamp(14px,3vw,28px) 80px}
+
+/* ---------- Controls ---------- */
+input,select,button{
+  font:inherit;font-size:13px;color:var(--ink-strong);background:var(--glass);
+  border:1px solid var(--brd);border-radius:var(--r-pill);padding:6px 14px;
+  transition:border-color .2s var(--ease),background .2s var(--ease),color .2s var(--ease);
+}
+input[type=checkbox]{accent-color:var(--cyan);padding:0;width:15px;height:15px;vertical-align:-3px}
+input::placeholder{color:var(--ink-faint)}
+input:focus,select:focus{outline:none;border-color:var(--brd-strong);background:rgba(39,154,241,.08)}
+select option{background:var(--navy);color:var(--ink-strong)}
+button{cursor:pointer;font-weight:500;color:var(--ink)}
+button:hover:not(:disabled){border-color:var(--brd-strong);color:#fff}
+button.on{background:var(--grad);color:#04223f;font-weight:700;border-color:transparent}
+button:disabled{opacity:.35;cursor:default}
+.mode{display:flex;gap:4px;padding:3px;border:1px solid var(--brd);border-radius:var(--r-pill);background:var(--glass-2)}
+.mode button{border-color:transparent;background:none}
+
+.card{background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--brd);border-radius:var(--r-card);box-shadow:0 22px 60px -30px rgba(8,32,62,.7)}
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:14px 18px;margin-bottom:16px}
+.bar label{color:var(--ink-mute);display:flex;gap:7px;align-items:center;font-size:13px}
+.bar input[type=number]{width:64px;padding:4px 10px}
+.bar input[type=search]{min-width:220px}
+.bar details{position:relative}
+.bar summary{cursor:pointer;list-style:none;border:1px solid var(--brd);border-radius:var(--r-pill);padding:6px 14px;background:var(--glass);color:var(--ink)}
+.bar summary::-webkit-details-marker{display:none}
+.bar details>div{
+  position:absolute;z-index:5;top:calc(100% + 6px);min-width:170px;display:flex;flex-direction:column;gap:6px;padding:12px;
+  background:var(--navy);border:1px solid var(--brd-strong);border-radius:var(--r-md);box-shadow:0 22px 50px -20px #000;
+}
+
+/* ---------- Period caption + KPIs ---------- */
+#percap{color:var(--ink-mute);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+#percap b{color:var(--lblue)}
+.kpis{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.kpi{background:var(--glass);border:1px solid var(--brd);border-radius:var(--r-md);padding:12px 18px;min-width:130px}
+.kpi b{display:block;font-size:22px;line-height:1.2;font-weight:700}
+.kpi span{color:var(--ink-mute);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.kpi.heute{
+  margin-left:auto;text-align:right;padding:16px 28px;border-color:var(--brd-strong);
+  background:linear-gradient(146deg,rgba(39,154,241,.18),rgba(181,240,255,.05));
+}
+.kpi.heute b{font-size:40px;line-height:1.1;font-weight:900;letter-spacing:-.02em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.kpi.heute span{color:var(--lblue)}
+
+/* ---------- Years + chart ---------- */
+#yearswrap{margin-bottom:16px;padding:14px 18px}
+#yearswrap summary{cursor:pointer;list-style:none;color:var(--lblue);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+#yearswrap summary::-webkit-details-marker{display:none}
+#yearswrap summary::before{content:"\25B8  ";color:var(--cyan-lite)}
+#yearswrap[open] summary::before{content:"\25BE  "}
+#yearswrap .n{color:var(--ink-faint);text-transform:none;letter-spacing:0;font-weight:400}
+#years{margin-top:10px}
+#years th,#years td{border-bottom:1px solid var(--brd);padding:6px 12px}
+#years th{position:static;background:none;cursor:default;color:var(--ink-faint);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+#years td{font-variant-numeric:tabular-nums}
+#chart{width:100%;height:170px;margin-bottom:16px;display:block;background:var(--glass);border:1px solid var(--brd);border-radius:var(--r-card)}
+#chart rect.b{fill:var(--cyan)}#chart rect.b.we{fill:var(--lblue);opacity:.45}
+#chart rect.h{fill:transparent}#chart rect.h:hover{fill:var(--lblue);opacity:.12}
+#chart text{fill:var(--ink-faint);font-size:10px}#chart line{stroke:var(--brd)}
+#tip{position:fixed;z-index:90;pointer-events:none;background:var(--navy);color:var(--ink-strong);border:1px solid var(--brd-strong);padding:8px 12px;border-radius:var(--r-md);font-size:12px;line-height:1.5;display:none;box-shadow:0 14px 30px -10px #000}
+#test{position:relative;z-index:1;background:rgba(224,167,92,.16);border-bottom:1px solid rgba(224,167,92,.5);color:#E0A75C;padding:8px clamp(14px,3vw,28px);font-weight:500;display:none}
+
+/* ---------- Table ---------- */
+.wrap{overflow:auto;max-height:70vh}
 table{border-collapse:collapse;width:100%}
-th,td{padding:5px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
-th{position:sticky;top:0;background:var(--card);cursor:pointer;user-select:none;font-weight:600}
-tr.f th{top:30px;cursor:default;font-weight:400;padding:3px 6px}
-tr.f input,tr.f select{width:100%;min-width:70px;padding:2px 4px;font-size:12px}
-tr.f input[type=date]{width:118px}
-tr.f input[type=number]{width:64px;min-width:0}
-tr.g td{background:var(--card);font-weight:600;cursor:pointer}
-tr.g .n{color:var(--mut);font-weight:400}
+th,td{padding:7px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--brd)}
+tbody tr:hover td{background:var(--glass-2)}
+th{position:sticky;top:0;z-index:2;height:38px;background:var(--navy);cursor:pointer;user-select:none;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lblue)}
+tr.f th{top:38px;cursor:default;font-weight:400;padding:4px 8px;text-transform:none;letter-spacing:0}
+tr.f input,tr.f select{width:100%;min-width:70px;padding:3px 10px;font-size:12px}
+tr.f input[type=date]{width:130px}
+tr.f input[type=number]{width:70px;min-width:0}
+tr.d td{background:rgba(39,154,241,.1);font-weight:700;color:#fff;border-top:1px solid var(--brd-strong)}
+tr.d .n,tr.g .n{color:var(--ink-mute);font-weight:400}
+tr.g td{background:var(--glass);font-weight:700;color:#fff;cursor:pointer}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
-.pager{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--mut)}
-details{position:relative}summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:6px;padding:4px 8px}
-details div{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:140px}
-.empty{padding:24px;text-align:center;color:var(--mut)}
+.pager{display:flex;gap:10px;align-items:center;margin-top:12px;color:var(--ink-mute)}
+.empty{padding:28px;text-align:center;color:var(--ink-faint)}
+@media(max-width:700px){.tb-title,.tb-sub,#csv{display:none}.mode button{padding:5px 10px;font-size:12px}.pernav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:18px}.per .g{flex:none}.kpi.heute{margin-left:0;text-align:left;width:100%}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<h1>Session Tracker</h1>
+<div class="blobs" aria-hidden="true"></div>
+<header class="topbar">
+  <div class="logo">ST</div>
+  <div><div class="tb-title">Session Tracker</div><div class="tb-sub">Anwesenheit &middot; Blöcke &amp; Rohereignisse</div></div>
+  <div class="tb-spacer"></div>
+  <div class="mode"><button id="m-blocks" class="on">Anwesenheitsblöcke</button><button id="m-events">Rohereignisse</button></div>
+  <button id="csv">CSV-Export</button>
+</header>
+<nav class="pernav" aria-label="Zeitraum"><div class="per" id="per"></div></nav>
 <div id="test">TESTDATEN – dieses Dashboard liest nicht die echte Datenbank (SESSION_DB gesetzt).</div>
 <div id="tip"></div>
 
-<div class="bar">
-  <button id="m-blocks" class="on">Anwesenheitsblöcke</button>
-  <button id="m-events">Rohereignisse</button>
+<main>
+<div id="percap"></div>
+<div class="kpis" id="kpis"></div>
+<svg id="chart" aria-label="Minuten pro Tag"></svg>
+<details id="yearswrap" class="card" open><summary>Schnitt pro Jahr <span class="n">(gewählter Zeitraum, unabhängig von den übrigen Filtern)</span></summary><table id="years"></table></details>
+
+<div class="bar card">
   <input id="q" type="search" placeholder="Freitextsuche…">
   <label>Gruppieren <select id="grp"></select></label>
   <label id="alivewrap"><input id="alive" type="checkbox" checked> Heartbeats ausblenden</label>
-  <label id="kurzwrap">Tage unter <input id="kurz" type="number" min="0" step="0.5" value="1" style="width:64px"> h ausblenden</label>
+  <label id="kurzwrap">Tage unter <input id="kurz" type="number" min="0" step="0.5" value="1"> h ausblenden</label>
   <label id="derwrap"><input id="der" type="checkbox"> hergeleitete Daten (Logs, Browser, Shell …)</label>
-  <label id="gapwrap">Pausen unter <input id="gap" type="number" min="0" step="1" value="5" style="width:64px"> min zusammenfassen</label>
+  <label id="gapwrap">Pausen unter <input id="gap" type="number" min="0" step="1" value="5"> min zusammenfassen</label>
   <details><summary>Spalten</summary><div id="cols"></div></details>
   <button id="reset">Filter zurücksetzen</button>
-  <button id="csv">CSV-Export</button>
 </div>
-
-<div class="per" id="per"></div>
-<div id="percap"></div>
-<div class="kpis" id="kpis"></div>
-<details id="yearswrap" open><summary>Schnitt pro Jahr <span class="n">(gewählter Zeitraum, unabhängig von den übrigen Filtern)</span></summary><table id="years"></table></details>
-<svg id="chart" aria-label="Minuten pro Tag"></svg>
-<div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
+<div class="wrap card"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
 <div class="pager" id="pager"></div>
+</main>
 
 <script>
 const $ = s => document.querySelector(s);
