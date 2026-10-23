@@ -9,7 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - `session-report --heute --json`: today's numbers as JSON; `session-report` honours `SESSION_DB` like the dashboard.
 
 ### Fixed
-- `install.sh` on a re-install: waits until `launchctl bootout` has removed the old agent before bootstrapping it again. Before, bootstrap could fail with "5: Input/output error" and leave the tracker stopped.
+- `install.sh` retries `launchctl bootstrap` up to 5 times; it could fail once with `Bootstrap failed: 5: Input/output error` right after `bootout`.
 
 ## [0.1.1] - 2026-10-21
 
