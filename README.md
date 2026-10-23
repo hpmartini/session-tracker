@@ -17,7 +17,7 @@ Presence and working-time tracker for macOS. A tiny background process records w
 - **Tracker** (`tracker/session-tracker.swift`): a LaunchAgent that writes events (`start`, `unlock`, `lock`, `sleep`, `wake`, `display_on`, `display_off`, `logout`, `stop`, heartbeats) to a local SQLite file.
 - **Report** (`bin/session-report`): builds presence blocks from the events, merges pauses shorter than a threshold (default 5 min) and prints per-day totals plus a per-year table (average per day, days under a threshold, average without those days).
 - **Dashboard** (`bin/session-dashboard`, `dashboard/dashboard.html`): local web UI on `http://127.0.0.1:8765` with blocks, raw events, filters, CSV export, a "today" tile that refreshes every minute and 13 period selectors (current/previous week, month, quarter, year, last 4 weeks, last 3/6 months, all time).
-- **Menubar** (`tracker/session-menubar.swift`): a LaunchAgent that shows today's total in the menu bar; its menu lists total, sessions (blocks after merging short pauses) and start and opens the dashboard (starting its LaunchAgent if it is not reachable). Numbers come from `session-report --heute --json` and refresh every minute. "Beenden" quits it until the next login; after a crash launchd restarts it.
+- **Menubar** (`tracker/session-menubar.swift`, installed as `~/Applications/Session Tracker.app`, so Raycast and Spotlight find it): a LaunchAgent that starts at login and shows today's total in the menu bar; its menu lists total, sessions (blocks after merging short pauses) and start and opens the dashboard (starting its LaunchAgent if it is not reachable). Numbers come from `session-report --heute --json` and refresh every minute. "Beenden" quits it until the next login or until you open the app again; after a crash launchd restarts it.
 - **Backfill** (`bin/session-backfill`, optional): derives *estimated* working times for the time before tracking started from traces macOS and your apps already keep: app usage (knowledgeC), unlock events in the unified log, browser history (Chrome, Arc, Brave, Edge, Safari, Firefox), shell history, Claude Code prompts and downloads. Stored separately in the table `derived` and marked as derived (`~`, "hergeleitet"). Off by default, never mixed into tracked data. SSH logins are not read from system logs.
 
 ![Dashboard, last month](docs/screenshots/dashboard-last-month.png)
@@ -32,7 +32,7 @@ cd session-tracker
 ./install.sh
 ```
 
-This copies the tools to `~/.local/bin`, the dashboard to `~/.local/share/session-tracker`, compiles the tracker and the menubar app and loads three LaunchAgents (`dev.hpmartini.session-tracker`, `dev.hpmartini.session-dashboard`, `dev.hpmartini.session-menubar`). Data lives in `~/.local/share/session-tracker/events.sqlite`.
+This copies the tools to `~/.local/bin`, the dashboard to `~/.local/share/session-tracker`, compiles the tracker, builds the menubar app in `~/Applications/Session Tracker.app` and loads three LaunchAgents (`dev.hpmartini.session-tracker`, `dev.hpmartini.session-dashboard`, `dev.hpmartini.session-menubar`). Data lives in `~/.local/share/session-tracker/events.sqlite`.
 
 To uninstall:
 
@@ -40,7 +40,8 @@ To uninstall:
 for n in session-tracker session-dashboard session-menubar; do
   launchctl bootout "gui/$(id -u)/dev.hpmartini.$n"; rm ~/Library/LaunchAgents/dev.hpmartini.$n.plist
 done
-rm ~/.local/bin/session-{tracker,menubar,report,dashboard,backfill}   # data stays in ~/.local/share/session-tracker
+rm ~/.local/bin/session-{tracker,report,dashboard,backfill}   # data stays in ~/.local/share/session-tracker
+rm -r ~/Applications/"Session Tracker.app"
 ```
 
 ## Usage
@@ -79,7 +80,7 @@ python3 scripts/make-demo-db.py /tmp/demo.sqlite
 SESSION_DB=/tmp/demo.sqlite bin/session-dashboard 8791   # open http://127.0.0.1:8791
 ```
 
-The menubar app reads `session-report` from its own directory, so a checkout can be tried without touching the install (the demo data has no events for today, so it shows `0:00 h`):
+The menubar app reads `session-report` from its own directory (falling back to `~/.local/bin`), so a checkout can be tried without touching the install (the demo data has no events for today, so it shows `0:00 h`):
 
 ```sh
 swiftc -O -o bin/session-menubar tracker/session-menubar.swift
@@ -88,7 +89,7 @@ SESSION_DB=/tmp/demo.sqlite bin/session-menubar
 
 ![Menubar with demo data](docs/screenshots/menubar.png)
 
-*Demo database plus two synthetic blocks for today (08:12–12:05 and an open one since 12:48, with heartbeats), so the menu shows "Ende: läuft".*
+*Demo database plus three synthetic blocks for today (with heartbeats), so the menu shows non-zero numbers.*
 
 The dashboard needs the tools installed in `~/.local/bin` (run `./install.sh` once) because it imports `session-report` from there.
 

@@ -17,6 +17,7 @@ jobs:
       - name: Syntax of installer and Python tools
         run: |
           sh -n install.sh
+          plutil -lint launchagents/*.plist tracker/*.plist
           python3 -m py_compile bin/session-dashboard bin/session-backfill scripts/make-demo-db.py
   dashboard-tests:
     runs-on: macos-latest

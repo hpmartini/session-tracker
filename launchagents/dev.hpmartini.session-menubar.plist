@@ -6,7 +6,7 @@
   <string>dev.hpmartini.session-menubar</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__HOME__/.local/bin/session-menubar</string>
+    <string>__HOME__/Applications/Session Tracker.app/Contents/MacOS/session-menubar</string>
   </array>
   <key>LimitLoadToSessionType</key>
   <string>Aqua</string>

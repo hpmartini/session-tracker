@@ -1,10 +1,11 @@
 // Menubar: heutige Anwesenheit (Gesamtzeit, Sessions, Start) und Sprung ins Dashboard.
-// Build: swiftc -O -o ~/.local/bin/session-menubar session-menubar.swift
+// Build: install.sh legt das Binary in ~/Applications/Session Tracker.app (Raycast/Spotlight finden es dort).
 import AppKit
 
 // Zahlen kommen aus session-report, damit Menubar, CLI und Dashboard dieselbe Block-Logik nutzen.
-// Liegt neben diesem Binary (install.sh: ~/.local/bin), so lässt sich ein Checkout testen, ohne die Installation anzufassen.
-let report = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent().appendingPathComponent("session-report").path
+// Erst neben diesem Binary (Checkout testen, ohne die Installation anzufassen), sonst die installierte Fassung.
+let neben = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent().appendingPathComponent("session-report").path
+let report = FileManager.default.isExecutableFile(atPath: neben) ? neben : NSHomeDirectory() + "/.local/bin/session-report"
 let dashboard = URL(string: "http://127.0.0.1:8765")!
 
 func heute() -> [String: Any]? {
@@ -35,7 +36,8 @@ final class App: NSObject, NSMenuDelegate {
         super.init()
         let menu = NSMenu()
         menu.autoenablesItems = false
-        zeilen.forEach { $0.isEnabled = false; menu.addItem($0) }
+        // Aktiv ohne Aktion: deaktivierte Einträge dimmt AppKit unabhängig von der Textfarbe; ein Klick schließt nur das Menü.
+        zeilen.forEach { menu.addItem($0) }
         menu.addItem(.separator())
         let open = NSMenuItem(title: "Dashboard öffnen", action: #selector(oeffnen), keyEquivalent: "d")
         open.target = self
@@ -52,20 +54,13 @@ final class App: NSObject, NSMenuDelegate {
     func aktualisieren() {
         guard let h = heute() else {
             item.button?.title = "– h"
-            zeigen(["session-report nicht erreichbar", "", ""])
+            zip(zeilen, ["session-report nicht erreichbar", "", ""]).forEach { $0.title = $1 }
             return
         }
         let gesamt = dauer(h["gesamt_s"] as? Int ?? 0)
         item.button?.title = gesamt
         // Kein "Ende": wer das Menü sieht, ist eingeloggt, der letzte Block läuft also immer noch.
-        zeigen(["Heute: \(gesamt)", "Sessions: \(h["sessions"] as? Int ?? 0)", "Start: \(zeit(h["start"]))"])
-    }
-
-    // Deaktivierte Zeilen zeichnet AppKit blass; Textfarbe explizit, damit die Werte lesbar bleiben.
-    func zeigen(_ texte: [String]) {
-        for (z, t) in zip(zeilen, texte) {
-            z.attributedTitle = NSAttributedString(string: t, attributes: [.foregroundColor: NSColor.labelColor, .font: NSFont.menuFont(ofSize: 0)])
-        }
+        zip(zeilen, ["Heute: \(gesamt)", "Sessions: \(h["sessions"] as? Int ?? 0)", "Start: \(zeit(h["start"]))"]).forEach { $0.title = $1 }
     }
 
     // Dashboard läuft per LaunchAgent; ist es nicht erreichbar, erst den Agent anstoßen, dann öffnen.
