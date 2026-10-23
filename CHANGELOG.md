@@ -8,6 +8,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 - Menubar app (`tracker/session-menubar.swift`, LaunchAgent `dev.hpmartini.session-menubar`): today's total in the menu bar, a menu with total, sessions, start and end, and "Dashboard öffnen" (starts the dashboard agent if it is not reachable).
 - `session-report --heute --json`: today's numbers as JSON; `session-report` honours `SESSION_DB` like the dashboard.
 
+### Fixed
+- `install.sh` on a re-install: waits until `launchctl bootout` has removed the old agent before bootstrapping it again. Before, bootstrap could fail with "5: Input/output error" and leave the tracker stopped.
+
 ## [0.1.1] - 2026-10-21
 
 ### Changed
