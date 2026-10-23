@@ -1,4 +1,4 @@
-// Menubar: heutige Anwesenheit (Gesamtzeit, Sessions, Start, Ende) und Sprung ins Dashboard.
+// Menubar: heutige Anwesenheit (Gesamtzeit, Sessions, Start) und Sprung ins Dashboard.
 // Build: swiftc -O -o ~/.local/bin/session-menubar session-menubar.swift
 import AppKit
 
@@ -29,7 +29,7 @@ func zeit(_ v: Any?) -> String {
 
 final class App: NSObject, NSMenuDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    let zeilen = (0..<4).map { _ in NSMenuItem(title: "", action: nil, keyEquivalent: "") }
+    let zeilen = (0..<3).map { _ in NSMenuItem(title: "", action: nil, keyEquivalent: "") }
 
     override init() {
         super.init()
@@ -52,16 +52,20 @@ final class App: NSObject, NSMenuDelegate {
     func aktualisieren() {
         guard let h = heute() else {
             item.button?.title = "– h"
-            zeilen[0].title = "session-report nicht erreichbar"
-            zeilen[1...].forEach { $0.title = "" }
+            zeigen(["session-report nicht erreichbar", "", ""])
             return
         }
         let gesamt = dauer(h["gesamt_s"] as? Int ?? 0)
         item.button?.title = gesamt
-        zeilen[0].title = "Heute: \(gesamt)"
-        zeilen[1].title = "Sessions: \(h["sessions"] as? Int ?? 0)"
-        zeilen[2].title = "Start: \(zeit(h["start"]))"
-        zeilen[3].title = "Ende: " + (h["laeuft"] as? Bool == true ? "läuft" : zeit(h["ende"]))
+        // Kein "Ende": wer das Menü sieht, ist eingeloggt, der letzte Block läuft also immer noch.
+        zeigen(["Heute: \(gesamt)", "Sessions: \(h["sessions"] as? Int ?? 0)", "Start: \(zeit(h["start"]))"])
+    }
+
+    // Deaktivierte Zeilen zeichnet AppKit blass; Textfarbe explizit, damit die Werte lesbar bleiben.
+    func zeigen(_ texte: [String]) {
+        for (z, t) in zip(zeilen, texte) {
+            z.attributedTitle = NSAttributedString(string: t, attributes: [.foregroundColor: NSColor.labelColor, .font: NSFont.menuFont(ofSize: 0)])
+        }
     }
 
     // Dashboard läuft per LaunchAgent; ist es nicht erreichbar, erst den Agent anstoßen, dann öffnen.

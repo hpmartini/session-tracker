@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
 ## [Unreleased]
 
 ### Added
-- Menubar app (`tracker/session-menubar.swift`, LaunchAgent `dev.hpmartini.session-menubar`): today's total in the menu bar, a menu with total, sessions, start and end, and "Dashboard öffnen" (starts the dashboard agent if it is not reachable).
+- Menubar app (`tracker/session-menubar.swift`, LaunchAgent `dev.hpmartini.session-menubar`): today's total in the menu bar, a menu with total, sessions and start, and "Dashboard öffnen" (starts the dashboard agent if it is not reachable).
 - `session-report --heute --json`: today's numbers as JSON; `session-report` honours `SESSION_DB` like the dashboard.
 
 ### Fixed
