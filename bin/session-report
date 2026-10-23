@@ -1,10 +1,10 @@
 #!/usr/bin/env -S python3 -I
-"""Anwesenheit pro Tag aus events.sqlite. Aufruf: session-report [--bloecke] [--pause MIN] [--kurz STUNDEN] [--zeitraum NAME] [--hergeleitet] [--selftest]"""
-import calendar, datetime as dt, os, sqlite3, sys, time
+"""Anwesenheit pro Tag aus events.sqlite. Aufruf: session-report [--bloecke] [--pause MIN] [--kurz STUNDEN] [--zeitraum NAME] [--hergeleitet] [--heute --json] [--selftest]"""
+import calendar, datetime as dt, json, os, sqlite3, sys, time
 
 GAP_MIN = 5  # Pausen darunter gelten als ein Block (Dashboard: Eingabefeld, gleicher Standard)
 DERIVED_PAD = 300  # shortcut: feste ±5 min um jeden Beleg (Shell/Browser-Punkte haben keine Dauer); je Quelle eichen, wenn Blöcke zu grob wirken
-DB = os.path.expanduser('~/.local/share/session-tracker/events.sqlite')
+DB = os.environ.get('SESSION_DB', os.path.expanduser('~/.local/share/session-tracker/events.sqlite'))  # Override für Tests und Demo-Daten
 OPEN = {'start', 'unlock', 'wake', 'display_on'}
 CLOSE = {'lock', 'sleep', 'display_off', 'logout', 'stop'}
 MAX_GAP = 600  # Heartbeat alle 300 s; längere Funkstille = Agent tot (Absturz, Strom weg)
@@ -105,6 +105,14 @@ def per_day(ivs):
     return days
 
 
+def heute(ivs, now):
+    """Kennzahlen des heutigen Tages (Menubar): Blöcke ab lokaler Mitternacht, epoch-Sekunden. laeuft = letzter Block ist noch offen (endet bei now)."""
+    lo = int(time.mktime(dt.date.fromtimestamp(now).timetuple()))
+    t = clip(ivs, lo, now + 1)
+    return {'gesamt_s': sum(b - a for a, b in t), 'sessions': len(t), 'start': t[0][0] if t else None,
+            'ende': t[-1][1] if t else None, 'laeuft': bool(t) and t[-1][1] == now}
+
+
 def selftest():
     r = [(0, 'start'), (300, 'alive'), (400, 'lock'), (500, 'display_on_locked'), (600, 'unlock'),
          (900, 'alive'), (2000, 'alive'), (2100, 'unlock'), (2200, 'sleep'), (3000, 'wake')]
@@ -132,6 +140,10 @@ def selftest():
     assert period_ranges(D(2026, 3, 31))['drei_monate'][0] == D(2026, 1, 1)  # Monatsende: 31.12. + 1 Tag, kein Überlauf
     assert len(period_epochs(D(2026, 1, 15))) == 13
     assert clip([(0, 10), (20, 30), (40, 50)], 5, 25) == [(5, 10), (20, 25)] and clip([(0, 5)], 5, 9) == []
+    m = int(dt.datetime(2026, 3, 3).timestamp()); now = m + 12 * 3600
+    assert heute([], now) == {'gesamt_s': 0, 'sessions': 0, 'start': None, 'ende': None, 'laeuft': False}
+    assert heute([(m - 3600, m + 3600), (m + 7200, m + 9000)], now) == {'gesamt_s': 5400, 'sessions': 2, 'start': m, 'ende': m + 9000, 'laeuft': False}  # gestern begonnen: ab Mitternacht
+    assert heute([(m - 7200, m - 3600), (m + 9 * 3600, now)], now) == {'gesamt_s': 3 * 3600, 'sessions': 1, 'start': m + 9 * 3600, 'ende': now, 'laeuft': True}
     print('selftest ok')
 
 
@@ -151,6 +163,8 @@ if __name__ == '__main__':
     db = sqlite3.connect(DB)
     rows = db.execute('SELECT ts, event FROM events ORDER BY ts, rowid').fetchall()
     now = int(time.time())
+    if '--heute' in sys.argv:  # nur getrackte Daten; --json ist derzeit das einzige Format
+        print(json.dumps(heute(merge(intervals(rows, now), gap * 60), now))); sys.exit()
     groups = [('', merge(intervals(rows, now), gap * 60))]
     if '--hergeleitet' in sys.argv:
         groups.insert(0, ('~', derived_blocks(db, rows[0][0] if rows else now, gap * 60)))  # ~ = hergeleitet, nicht getrackt
