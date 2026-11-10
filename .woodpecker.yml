@@ -1,0 +1,13 @@
+# Ersetzt GitHub Actions (Account-weite Budget-Sperre, hpmartini/TexBase#357): nur Lint, nur beim PR.
+# Der Swift-Typecheck (swiftc -typecheck, AppKit) läuft nur auf macOS; der Woodpecker-Agent ist Linux/Docker.
+when:
+  - event: pull_request
+    branch: main
+
+steps:
+  - name: lint
+    image: python:3.13-slim-bookworm
+    # Syntax-Prüfung von Installer und Python-Tools aus dem bisherigen ci.yml (ohne plutil, das gibt es nur auf macOS).
+    commands:
+      - sh -n install.sh
+      - python3 -m py_compile bin/session-dashboard bin/session-backfill scripts/make-demo-db.py
